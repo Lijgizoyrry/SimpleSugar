@@ -1596,41 +1596,6 @@ function recipeCard(r) {
     <button class="fav ${on ? 'on' : ''}" data-act="fav" data-id="${r.id}" aria-pressed="${on}" aria-label="${on ? 'Retirer des favoris' : 'Ajouter aux favoris'}">${ic(on ? 'heartf' : 'heart')}</button>
   </article>`;
 }
-function inProgress() {
-  const all = Progress.all(); let best = null;
-  for (const [id, p] of Object.entries(all)) {
-    const r = Store.get(id); if (!r) continue;
-    if (p.step <= 0 || p.step > r.steps.length) continue;
-    if (Date.now() - (p.at || 0) > 5 * 864e5) continue;
-    if (!best || p.at > best.p.at) best = { r, p };
-  }
-  return best;
-}
-function ideaOfTheDay(list) {
-  if (!list.length) return null;
-  const day = Math.floor(Date.now() / 864e5);
-  const sorted = [...list].sort((a, b) => hash(a.id + day) - hash(b.id + day));
-  return sorted[(Home.featShift % sorted.length + sorted.length) % sorted.length];
-}
-function featHTML() {
-  const list = Store.all();
-  if (!list.length) return { cls: 'feat-empty', html: `<div class="empty">${Hand.svg('bienvenue', { sw: 64, cls: 'welcome' })}<p>Les recettes arrivent bientôt.</p></div>` };
-  const prog = inProgress();
-  if (prog) {
-    const { r, p } = prog; const n = r.steps.length;
-    return { cls: 'tap', id: r.id, html: `<div class="feat-cover">${coverHTML(r)}</div>
-      <div class="feat-top"><button class="icon-btn" data-act="feat-forget" data-id="${r.id}" aria-label="Oublier cette progression">${ic('close')}</button></div>
-      <div class="feat-body"><span class="eyebrow">${ic('play')}En cours · étape ${p.step} sur ${n}</span><h2>${esc(r.title)}</h2>
-      <div class="progress" style="--p:${Math.round(p.step / n * 100)}%"><i></i></div>
-      <div class="feat-actions"><button class="btn btn-primary" data-act="cook" data-id="${r.id}">${ic('play')}Reprendre</button><button class="btn" data-act="open" data-id="${r.id}">Voir la recette</button></div></div>` };
-  }
-  const r = ideaOfTheDay(list);
-  return { cls: 'tap', id: r.id, html: `<div class="feat-cover">${coverHTML(r)}</div>
-    <div class="feat-top"><button class="icon-btn" data-act="shuffle" aria-label="Une autre idée">${ic('dice')}</button></div>
-    <div class="feat-body"><span class="eyebrow">${ic('sparkles')}${Home.featShift ? 'Et pourquoi pas…' : 'Idée du jour'}</span><h2>${esc(r.title)}</h2>
-    <div class="feat-meta"><span class="chip">${ic('clock')}${fmtDuration(totalTime(r))}</span><span class="chip">${DIFF_LABEL[r.difficulty]}</span><span class="chip">${ic('users')}${r.servings}${NB}${esc(r.servings_label || 'parts')}</span></div>
-    <div class="feat-actions"><button class="btn btn-primary" data-act="cook" data-id="${r.id}">${ic('play')}Cuisiner</button><button class="btn" data-act="open" data-id="${r.id}">Voir la recette</button></div></div>` };
-}
 function timerTileHTML() {
   const list = Timers.list;
   if (!list.length) {
@@ -1660,7 +1625,6 @@ Views.home = (ctx) => {
         <div class="hero-logo" data-act="replay" title="Réécrire">${Hand.svg('logo', { sw: 60 })}</div>
         <div style="display:grid;gap:12px"><p class="hero-sub">Recettes de pâtisserie et de cuisine, à suivre pas à pas.</p><div class="chips" id="stats"></div></div>
       </div>
-      <div class="tile glass feat w2 h2" id="feat" data-depth=".03"></div>
       <div class="tile glass search-tile w2" data-depth=".03">
         <span class="eyebrow">${ic('search')}Rechercher</span>
         <button class="fake-search" data-act="spot">${ic('search')}<span>Une recette, un ingrédient…</span><kbd>⌘K</kbd></button>
@@ -1668,8 +1632,7 @@ Views.home = (ctx) => {
       </div>
       <div class="tile glass cats w2" id="cats" data-depth=".03"></div>
       <div class="tile glass timer-tile w2" id="ttile" data-depth=".03"></div>
-      <button class="tile glass mini tap" id="mini1" data-act="random" data-depth=".03"><span class="ico-wrap dice">${ic('dice')}</span><span><b>Au hasard</b><span>Une recette surprise</span></span></button>
-      <button class="tile glass mini tap" data-act="favs" data-depth=".03"><span class="ico-wrap fav">${ic('heartf')}</span><span><b>Favoris</b><span id="favcount"></span></span></button>
+      <button class="tile glass mini tap w2" id="mini1" data-act="random" data-depth=".03"><span class="ico-wrap dice">${ic('dice')}</span><span><b>Au hasard</b><span>Une recette surprise</span></span></button>
     </section>
     <div class="section-head" id="all"><h2><span id="list-title">Toutes les recettes</span><span class="count" id="count"></span></h2>
       <div class="seg" id="filter" role="group" aria-label="Filtrer">
@@ -1691,16 +1654,9 @@ Views.home = (ctx) => {
     const list = Store.all();
     const pat = list.filter(r => r.category !== 'cuisine').length, cui = list.length - pat;
     $('#stats', el).innerHTML = list.length ? `<span class="chip soft">${ic('book')}${plural(list.length, 'recette', 'recettes')}</span><span class="chip soft"><i class="dot"></i>${pat}${NB}pâtisserie${pat > 1 ? 's' : ''}</span><span class="chip soft"><i class="dot cui"></i>${cui}${NB}salée${cui > 1 ? 's' : ''}</span>` : '';
-    const f = featHTML(); const fe = $('#feat', el);
-    if (fe.dataset.sig !== f.cls + (f.id || '') + f.html.length) {
-      fe.className = `tile glass feat w2 h2 ${f.cls}`; fe.dataset.id = f.id || ''; fe.innerHTML = f.html; fe.dataset.sig = f.cls + (f.id || '') + f.html.length;
-      if (f.cls === 'feat-empty') { const w = $('svg.hand', fe); if (w) Hand.play(w, { duration: 2400, delay: 300 }); }
-    }
     $('#cats', el).innerHTML = [['patisserie', 'Pâtisserie', 'whisk', pat, 'var(--pat)'], ['cuisine', 'Salé', 'pot', cui, 'var(--cui)']].map(([k, l, i, n, c]) =>
       `<button class="cat ${Home.filter === k ? 'on' : ''}" data-act="cat" data-cat="${k}" style="--k:${c}" aria-pressed="${Home.filter === k}"><span class="ico-wrap">${ic(i)}</span><span><b>${l}</b><span>${plural(n, 'recette', 'recettes')}</span></span></button>`).join('');
     paintTimers();
-    const favN = list.filter(r => Favs.has(r.id)).length;
-    $('#favcount', el).textContent = favN ? plural(favN, 'recette', 'recettes') : 'Aucune pour l’instant';
     paintGrid(false);
   }
   function paintTimers() { const t = $('#ttile', el); if (t) t.innerHTML = timerTileHTML(); }
@@ -1745,19 +1701,16 @@ Views.home = (ctx) => {
   el.addEventListener('click', async e => {
     const fb = e.target.closest('#filter button'); if (fb) return setFilter(fb.dataset.f, false);
     const a = e.target.closest('[data-act]');
-    if (!a) { const feat = e.target.closest('#feat.tap'); if (feat && feat.dataset.id) Router.go('/r/' + feat.dataset.id); return; }
+    if (!a) return;
     const act = a.dataset.act, id = a.dataset.id;
     switch (act) {
       case 'open': if (e.target.closest('.fav')) return; Router.go('/r/' + id); break;
-      case 'fav': { e.stopPropagation(); const on = Favs.toggle(id); a.classList.toggle('on', on); a.innerHTML = ic(on ? 'heartf' : 'heart'); a.setAttribute('aria-pressed', on); if (Home.filter === 'fav') paintGrid(); const favN = Store.all().filter(r => Favs.has(r.id)).length; $('#favcount', el).textContent = favN ? plural(favN, 'recette', 'recettes') : 'Aucune pour l’instant'; break; }
+      case 'fav': { e.stopPropagation(); const on = Favs.toggle(id); a.classList.toggle('on', on); a.innerHTML = ic(on ? 'heartf' : 'heart'); a.setAttribute('aria-pressed', on); if (Home.filter === 'fav') paintGrid(); break; }
       case 'cook': Router.go('/r/' + id + '/cuisine'); break;
-      case 'shuffle': e.stopPropagation(); Home.featShift++; paint(); break;
-      case 'feat-forget': e.stopPropagation(); Progress.clear(id); paint(); break;
       case 'replay': Hand.play($('svg', a), { duration: 2600 }); break;
       case 'spot': Spot.open(a.dataset.pre || ''); break;
       case 'cat': setFilter(a.dataset.cat === Home.filter ? 'all' : a.dataset.cat, a.dataset.cat !== Home.filter); break;
       case 'sub': Home.sub = Home.sub === a.dataset.sub ? '' : a.dataset.sub; paintGrid(); break;
-      case 'favs': setFilter('fav', true); break;
       case 'random': { const l = Store.all(); if (l.length) Router.go('/r/' + l[Math.floor(Math.random() * l.length)].id); break; }
       case 'settings': openSettings(); break;
       case 'quick-timer': Timers.start({ label: `Minuteur ${a.dataset.min}${NB}min`, sec: +a.dataset.min * 60 }); break;
